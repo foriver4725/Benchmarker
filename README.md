@@ -7,6 +7,8 @@ This tool displays FPS, memory usage, garbage collection counts, and draw calls 
 It is designed for high performance with zero additional GC.Alloc, ensuring smooth operation even in Development Builds.<br/>
 In production builds, it will always be disabled automatically.<br/>
 
+<img width="1596" height="212" alt="Benchmarker_profiling" src="https://github.com/user-attachments/assets/acad94b5-cb26-41b8-87c4-35b31c6ad739" />
+
 ## How to Use
 
 ### 1. Install the dependent libraries
