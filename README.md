@@ -17,3 +17,42 @@ First, you need to install the libraries used by this feature.<br/>
 
 ### 2. Import the asset package
 Download the asset package from [the latest release](https://github.com/foriver4725/Benchmarker/releases) and import it into your project.<br/>
+
+## Supplement
+- If you want to check profiling during a build, enable Development Build.<br/>
+- The colors of the profiled values are determined based on threshold values.<br/>
+  Depending on the game you are creating, you may want to adjust these thresholds.<br/>
+  If so, check the [UpdateUI()](https://github.com/foriver4725/Benchmarker/blob/main/Assets/foriver4725/Benchmarker/Assets/Benchmarker.cs#L122) method in the script and modify the values accordingly.<br/>
+
+```cs
+string fpsColorText = ColorHtmlTexts[fps switch
+{
+    > 54 => ColorGreen,
+    > 42 => ColorYellow,
+    _ => ColorRed
+}];
+string memoryUsingColorText = ColorHtmlTexts[allocatedMemory switch
+{
+    < 800 => ColorGreen,
+    < 1200 => ColorYellow,
+    _ => ColorRed
+}];
+string gcCountColorText = ColorHtmlTexts[gcCount switch
+{
+    0 => ColorGreen,
+    < 4 => ColorYellow,
+    _ => ColorRed
+}];
+string setPassCallsColorText = ColorHtmlTexts[setPassCalls switch
+{
+    < 80 => ColorGreen,
+    < 120 => ColorYellow,
+    _ => ColorRed
+}];
+string drawCallsColorText = ColorHtmlTexts[drawCalls switch
+{
+    < 120 => ColorGreen,
+    < 180 => ColorYellow,
+    _ => ColorRed
+}];
+```
