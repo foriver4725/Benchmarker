@@ -1,9 +1,10 @@
 # Benchmarker
 
-<img width="2214" height="60" alt="Benchmarker_using" src="https://github.com/user-attachments/assets/d044ddad-da56-41e1-a2ef-d7d64ce5627a" />
+<img width="1283" height="29" alt="image" src="https://github.com/user-attachments/assets/e634d0c7-b3c4-405b-bcac-599bc39f2119" />
 
 ## Description
-This tool displays FPS, memory usage, garbage collection counts, and draw calls directly on the game screen as benchmarks.<br/>
+This tool displays benchmark information directly on the game screen, including CPU frame time, memory usage, per-frame GC.Alloc, total GC.Collect count, SetPass calls, and Draw calls.<br/>
+CPU frame time is supported only when VSync is disabled, and Per-frame GC.Alloc is supported only in Mono builds.<br/>
 It is designed for high performance with zero additional GC.Alloc, ensuring smooth operation even in Development Builds.<br/>
 In production builds, it will always be disabled automatically.<br/>
 
@@ -27,34 +28,40 @@ Download the asset package from [the latest release](https://github.com/foriver4
   If so, check the [`UpdateUI()`](https://github.com/foriver4725/Benchmarker/blob/main/Assets/foriver4725/Benchmarker/Assets/Benchmarker.cs#L122) method in the script and modify the values accordingly.<br/>
 
 ```cs
-string fpsColorText = ColorHtmlTexts[fps switch
+string frameTimeColorText = ColorHtmlTexts[frameTime switch
 {
-    > 54 => ColorGreen,
-    > 42 => ColorYellow,
-    _ => ColorRed
+    < 21.0f => ColorGreen,
+    < 28.0f => ColorYellow,
+    _       => ColorRed
 }];
 string memoryUsingColorText = ColorHtmlTexts[allocatedMemory switch
 {
-    < 800 => ColorGreen,
+    < 800  => ColorGreen,
     < 1200 => ColorYellow,
-    _ => ColorRed
+    _      => ColorRed
+}];
+string gcAllocatedInFrameColorText = ColorHtmlTexts[gcAllocatedInFrame switch
+{
+    < 15.0f => ColorGreen,
+    < 20.0f => ColorYellow,
+    _       => ColorRed
 }];
 string gcCountColorText = ColorHtmlTexts[gcCount switch
 {
-    0 => ColorGreen,
+    0   => ColorGreen,
     < 4 => ColorYellow,
-    _ => ColorRed
+    _   => ColorRed
 }];
 string setPassCallsColorText = ColorHtmlTexts[setPassCalls switch
 {
-    < 80 => ColorGreen,
+    < 80  => ColorGreen,
     < 120 => ColorYellow,
-    _ => ColorRed
+    _     => ColorRed
 }];
 string drawCallsColorText = ColorHtmlTexts[drawCalls switch
 {
     < 120 => ColorGreen,
     < 180 => ColorYellow,
-    _ => ColorRed
+    _     => ColorRed
 }];
 ```
