@@ -26,14 +26,16 @@ namespace foriver4725.Benchmarker
         private float time = 0f;
         private float baseTime = 0f;
 
-        private int fpsCount = 0;
-        private float fps = -1f;
+        private ProfilerRecorder frameTimeRecorder;
+        private float frameTime = -1f; // Supported on VSync-Off only.
 
         private float allocatedMemory = -1f;
         private float reservedMemory = -1f;
         private float unusedReservedMemory = -1f;
         private float memoryUsingRate = -1f;
 
+        private ProfilerRecorder gcAllocatedInFrameRecorder;
+        private float gcAllocatedInFrame = -1f; // Supported on Mono only.
         private int gcCountInit = -1;
         private int gcCount = -1;
 
@@ -49,18 +51,22 @@ namespace foriver4725.Benchmarker
             Color.yellow.ToHtmlStringRGB(),
             Color.red.ToHtmlStringRGB()
         };
+
         private static readonly int ColorGreen = 0;
         private static readonly int ColorYellow = 1;
         private static readonly int ColorRed = 2;
 
         private void Awake()
         {
-            setPassCallsRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
-            drawCallsRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
+            frameTimeRecorder          = ProfilerRecorder.StartNew(ProfilerCategory.Internal, "Main Thread");
+            gcAllocatedInFrameRecorder = ProfilerRecorder.StartNew(ProfilerCategory.Memory, "GC Allocated In Frame");
+            setPassCallsRecorder       = ProfilerRecorder.StartNew(ProfilerCategory.Render, "SetPass Calls Count");
+            drawCallsRecorder          = ProfilerRecorder.StartNew(ProfilerCategory.Render, "Draw Calls Count");
         }
 
         private void OnDestroy()
         {
+            frameTimeRecorder.Dispose();
             setPassCallsRecorder.Dispose();
             drawCallsRecorder.Dispose();
         }
@@ -81,7 +87,6 @@ namespace foriver4725.Benchmarker
             }
 #endif
 
-            fpsCount++;
             time = Time.realtimeSinceStartup - baseTime;
             if (time >= 0.5f)
             {
@@ -92,14 +97,26 @@ namespace foriver4725.Benchmarker
 
         private void UpdateStats()
         {
-            fps = fpsCount / time;
-            fpsCount = 0;
             baseTime = Time.realtimeSinceStartup;
 
-            allocatedMemory = Profiler.GetTotalAllocatedMemoryLong().ByteToMegabyte();
-            reservedMemory = Profiler.GetTotalReservedMemoryLong().ByteToMegabyte();
+            if (frameTimeRecorder.Valid)
+            {
+                long lastValue = frameTimeRecorder.LastValue;
+                if (lastValue > 0)
+                    frameTime = lastValue * 1e-6f; // [ns] -> [ms]
+            }
+
+            allocatedMemory      = Profiler.GetTotalAllocatedMemoryLong().ByteToMegabyte();
+            reservedMemory       = Profiler.GetTotalReservedMemoryLong().ByteToMegabyte();
             unusedReservedMemory = Profiler.GetTotalUnusedReservedMemoryLong().ByteToMegabyte();
-            memoryUsingRate = allocatedMemory / reservedMemory;
+            memoryUsingRate      = allocatedMemory / reservedMemory;
+
+            if (gcAllocatedInFrameRecorder.Valid)
+            {
+                long lastValue = gcAllocatedInFrameRecorder.LastValue;
+                if (lastValue > 0)
+                    gcAllocatedInFrame = lastValue.ByteToKilobyte();
+            }
 
             if (gcCountInit == -1)
                 gcCountInit = GC.CollectionCount(0);
@@ -111,6 +128,7 @@ namespace foriver4725.Benchmarker
                 if (lastValue > 0)
                     setPassCalls = lastValue;
             }
+
             if (drawCallsRecorder.Valid)
             {
                 long lastValue = drawCallsRecorder.LastValue;
@@ -123,46 +141,54 @@ namespace foriver4725.Benchmarker
         {
             if (text == null) return;
 
-            string fpsColorText = ColorHtmlTexts[fps switch
+            string frameTimeColorText = ColorHtmlTexts[frameTime switch
             {
-                > 54 => ColorGreen,
-                > 42 => ColorYellow,
-                _ => ColorRed
+                < 21.0f => ColorGreen,
+                < 28.0f => ColorYellow,
+                _       => ColorRed
             }];
             string memoryUsingColorText = ColorHtmlTexts[allocatedMemory switch
             {
-                < 800 => ColorGreen,
+                < 800  => ColorGreen,
                 < 1200 => ColorYellow,
-                _ => ColorRed
+                _      => ColorRed
+            }];
+            string gcAllocatedInFrameColorText = ColorHtmlTexts[gcAllocatedInFrame switch
+            {
+                < 15.0f => ColorGreen,
+                < 20.0f => ColorYellow,
+                _       => ColorRed
             }];
             string gcCountColorText = ColorHtmlTexts[gcCount switch
             {
-                0 => ColorGreen,
+                0   => ColorGreen,
                 < 4 => ColorYellow,
-                _ => ColorRed
+                _   => ColorRed
             }];
             string setPassCallsColorText = ColorHtmlTexts[setPassCalls switch
             {
-                < 80 => ColorGreen,
+                < 80  => ColorGreen,
                 < 120 => ColorYellow,
-                _ => ColorRed
+                _     => ColorRed
             }];
             string drawCallsColorText = ColorHtmlTexts[drawCalls switch
             {
                 < 120 => ColorGreen,
                 < 180 => ColorYellow,
-                _ => ColorRed
+                _     => ColorRed
             }];
 
             using var sb = ZString.CreateStringBuilder();
-            sb.AppendFormat("FPS : <color=#{0}>{1:F2}</color>,    ",
-                fpsColorText, fps);
+            sb.AppendFormat("FrameTime(ms) : <color=#{0}>{1:F2}</color>,    ",
+                            frameTimeColorText, frameTime);
             sb.AppendFormat("Memory(MB) : <color=#{0}>{1:F2}/{2:F2} ({3:P2}, {4:F2} unused)</color>,    ",
-                memoryUsingColorText, allocatedMemory, reservedMemory, memoryUsingRate, unusedReservedMemory);
-            sb.AppendFormat("GC.Collect : <color=#{0}>{1}</color>,    ",
-                gcCountColorText, gcCount);
+                            memoryUsingColorText, allocatedMemory, reservedMemory, memoryUsingRate,
+                            unusedReservedMemory);
+            sb.AppendFormat(
+                "GC : Alloc(KB)=<color=#{0}>{2:F2}</color>,TotalCollect=<color=#{1}>{3}</color>,    ",
+                gcAllocatedInFrameColorText, gcCountColorText, gcAllocatedInFrame, gcCount);
             sb.AppendFormat("Calls : SetPass=<color=#{0}>{2}</color>,Draw=<color=#{1}>{3}</color>,    ",
-                setPassCallsColorText, drawCallsColorText, setPassCalls, drawCalls);
+                            setPassCallsColorText, drawCallsColorText, setPassCalls, drawCalls);
             text.SetText(sb);
         }
 
@@ -178,6 +204,9 @@ namespace foriver4725.Benchmarker
     internal static class BenchmarkerEx
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static float ByteToKilobyte(this long n) => n / 1024f;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static float ByteToMegabyte(this long n) => (n >> 10) / 1024f;
 
         // Extension methods for ColorUtility.ToHtmlString()-style methods that replace the internal processing with ZString.
@@ -186,14 +215,20 @@ namespace foriver4725.Benchmarker
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static string ToHtmlStringRGB(this Color color)
         {
-            Color32 color2 = new Color32((byte)Mathf.Clamp(Mathf.RoundToInt(color.r * 255f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(color.g * 255f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255), 1);
+            Color32 color2 = new Color32((byte)Mathf.Clamp(Mathf.RoundToInt(color.r * 255f), 0, 255),
+                                         (byte)Mathf.Clamp(Mathf.RoundToInt(color.g * 255f), 0, 255),
+                                         (byte)Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255), 1);
             return ZString.Format("{0:X2}{1:X2}{2:X2}", color2.r, color2.g, color2.b);
         }
+
         // Returns the color as a hexadecimal string in the format "RRGGBBAA".
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static string ToHtmlStringRGBA(this Color color)
         {
-            Color32 color2 = new Color32((byte)Mathf.Clamp(Mathf.RoundToInt(color.r * 255f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(color.g * 255f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255), (byte)Mathf.Clamp(Mathf.RoundToInt(color.a * 255f), 0, 255));
+            Color32 color2 = new Color32((byte)Mathf.Clamp(Mathf.RoundToInt(color.r * 255f), 0, 255),
+                                         (byte)Mathf.Clamp(Mathf.RoundToInt(color.g * 255f), 0, 255),
+                                         (byte)Mathf.Clamp(Mathf.RoundToInt(color.b * 255f), 0, 255),
+                                         (byte)Mathf.Clamp(Mathf.RoundToInt(color.a * 255f), 0, 255));
             return ZString.Format("{0:X2}{1:X2}{2:X2}{3:X2}", color2.r, color2.g, color2.b, color2.a);
         }
     }
